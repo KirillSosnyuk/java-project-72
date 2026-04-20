@@ -1,13 +1,9 @@
-FROM eclipse-temurin:21-jdk-alpine
+FROM gradle:latest
 
 WORKDIR /app
 
-COPY . .
+COPY / .
 
-RUN chmod +x gradlew
+RUN gradle installDist
 
-RUN ./gradlew --no-daemon build
-
-EXPOSE 7070
-
-CMD ["./gradlew", "--no-daemon", "run"]
+CMD ./build/install/app/bin/app
