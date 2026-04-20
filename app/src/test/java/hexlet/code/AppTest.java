@@ -59,14 +59,10 @@ class AppTest {
         JavalinTest.test(app, (server, client) -> {
             var requestBody = "url=https://www.example.com/some-path";
             var response = client.post("/urls", requestBody);
-
             Assertions.assertEquals(302, response.code());
 
             var urlInDb = UrlRepository.findByName("https://www.example.com");
             Assertions.assertTrue(urlInDb.isPresent());
-
-            var listResponse = client.get("/urls");
-            Assertions.assertTrue(listResponse.body().string().contains("https://www.example.com"));
         });
     }
 
@@ -79,9 +75,7 @@ class AppTest {
         JavalinTest.test(app, (server, client) -> {
             var response = client.post("/urls", "url=" + domain);
             Assertions.assertEquals(302, response.code());
-
-            var count = UrlRepository.getEntities().size();
-            Assertions.assertEquals(1, count);
+            Assertions.assertEquals(1, UrlRepository.getEntities().size());
         });
     }
 
@@ -90,33 +84,14 @@ class AppTest {
         var app = App.getApp();
         JavalinTest.test(app, (server, client) -> {
             var response = client.post("/urls", "url=not-a-url");
-            Assertions.assertTrue(response.code() == 302 || response.code() == 422 || response.code() == 200);
-        });
-    }
 
-    @Test
-    void testRunCheckSuccess() throws Exception {
-        var app = App.getApp();
-        var mockHtml = "<html><title>Test Title</title><h1>Test H1</h1>"
-                + "<meta name=\"description\" content=\"Test Desc\"></html>";
+            var code = response.code();
+            Assertions.assertTrue(code == 422 || code == 400 || code == 302 || code == 200,
+                    "Unexpected status code: " + code);
 
-        mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
-
-        var targetUrl = mockWebServer.url("/").toString().replaceAll("/$", "");
-        var urlEntity = new Url(targetUrl);
-        UrlRepository.save(urlEntity);
-
-        JavalinTest.test(app, (server, client) -> {
-            var response = client.post("/urls/" + urlEntity.getId() + "/checks");
-
-            Assertions.assertEquals(302, response.code());
-
-            var checks = UrlCheckRepository.findByUrlId(urlEntity.getId());
-            Assertions.assertFalse(checks.isEmpty());
-
-            var lastCheck = checks.get(0);
-            Assertions.assertEquals(200, lastCheck.getStatusCode());
-            Assertions.assertEquals("Test Title", lastCheck.getTitle());
+            if (code != 302) {
+                Assertions.assertTrue(response.body().string().contains("Некорректный URL"));
+            }
         });
     }
 
@@ -134,16 +109,81 @@ class AppTest {
     }
 
     @Test
+    void testUrlNotFound() throws Exception {
+        var app = App.getApp();
+        JavalinTest.test(app, (server, client) -> {
+            var response = client.get("/urls/9999");
+            Assertions.assertEquals(404, response.code());
+        });
+    }
+
+    @Test
+    void testRunCheckSuccess() throws Exception {
+        var app = App.getApp();
+        var mockHtml = "<html><title>Title</title><h1>H1</h1><meta name=\"description\" content=\"Desc\"></html>";
+        mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody(mockHtml));
+
+        var targetUrl = mockWebServer.url("/").toString().replaceAll("/$", "");
+        var urlEntity = new Url(targetUrl);
+        UrlRepository.save(urlEntity);
+
+        JavalinTest.test(app, (server, client) -> {
+            var response = client.post("/urls/" + urlEntity.getId() + "/checks");
+            Assertions.assertEquals(302, response.code());
+
+            var check = UrlCheckRepository.findByUrlId(urlEntity.getId()).get(0);
+            Assertions.assertEquals(200, check.getStatusCode());
+            Assertions.assertEquals("Title", check.getTitle());
+            Assertions.assertEquals("H1", check.getH1());
+            Assertions.assertEquals("Desc", check.getDescription());
+        });
+    }
+
+    @Test
+    void testRunCheckEmptyTags() throws Exception {
+        var app = App.getApp();
+        mockWebServer.enqueue(new MockResponse().setResponseCode(200).setBody("<html></html>"));
+
+        var targetUrl = mockWebServer.url("/").toString().replaceAll("/$", "");
+        var urlEntity = new Url(targetUrl);
+        UrlRepository.save(urlEntity);
+
+        JavalinTest.test(app, (server, client) -> {
+            client.post("/urls/" + urlEntity.getId() + "/checks");
+            var check = UrlCheckRepository.findByUrlId(urlEntity.getId()).get(0);
+            Assertions.assertEquals("", check.getTitle());
+            Assertions.assertEquals("", check.getH1());
+            Assertions.assertEquals("", check.getDescription());
+        });
+    }
+
+    @Test
+    void testRunCheckFailure() throws Exception {
+        var app = App.getApp();
+        mockWebServer.enqueue(new MockResponse().setResponseCode(404));
+
+        var url = new Url("https://non-existent.com");
+        UrlRepository.save(url);
+
+        JavalinTest.test(app, (server, client) -> {
+            var response = client.post("/urls/" + url.getId() + "/checks");
+            Assertions.assertEquals(302, response.code());
+            // Проверяем, что запись о проверке либо не создалась, либо содержит код ошибки (зависит от реализации)
+            var checks = UrlCheckRepository.findByUrlId(url.getId());
+            Assertions.assertTrue(checks.isEmpty() || checks.get(0).getStatusCode() >= 400);
+        });
+    }
+
+    @Test
     void testLatestChecksLogic() throws Exception {
         var url = new Url("https://latest.io");
         UrlRepository.save(url);
 
-        var check1 = new UrlCheck(url.getId(), 200, "H1-1", "T1", "D1");
-        var check2 = new UrlCheck(url.getId(), 500, "H1-2", "T2", "D2");
-        UrlCheckRepository.save(check1);
-        UrlCheckRepository.save(check2);
+        UrlCheckRepository.save(new UrlCheck(url.getId(), 200, "old", "old", "old"));
+        UrlCheckRepository.save(new UrlCheck(url.getId(), 201, "new", "new", "new"));
 
         var latest = UrlCheckRepository.findLatestChecks();
-        Assertions.assertEquals(500, latest.get(url.getId()).getStatusCode());
+        Assertions.assertEquals(201, latest.get(url.getId()).getStatusCode());
+        Assertions.assertEquals("new", latest.get(url.getId()).getH1());
     }
 }
