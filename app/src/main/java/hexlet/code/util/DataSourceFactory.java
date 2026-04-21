@@ -8,8 +8,7 @@ import javax.sql.DataSource;
 public class DataSourceFactory {
     private static final String DB_URL_PROPERTY = "JDBC_DATABASE_URL";
 
-    private static final String DEFAULT_DB_URL = "jdbc:postgresql://admin:"
-            + "WTALZycWW7UNmpISKsQJOsoIUsg6F6xK@dpg-d7ch1ekp3tds739vggk0-a.oregon-postgres.render.com/db_uip0";
+    private static final String DEFAULT_DB_URL = "jdbc:h2:mem:project;DB_CLOSE_DELAY=-1;";
 
     public static DataSource getDataSource() {
         var databaseUrlFromProperty = System.getProperty(DB_URL_PROPERTY);
