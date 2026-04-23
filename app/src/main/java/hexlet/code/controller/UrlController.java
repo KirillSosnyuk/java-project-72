@@ -9,7 +9,9 @@ import io.javalin.http.NotFoundResponse;
 import kong.unirest.core.Unirest;
 import org.jsoup.Jsoup;
 
+import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
@@ -110,7 +112,8 @@ public class UrlController {
         ctx.redirect(NamedRoutes.urlPath(id));
     }
 
-    private static String normalizeUrl(String rawUrl) throws Exception {
+    private static String normalizeUrl(String rawUrl)
+            throws URISyntaxException, MalformedURLException {
         if (rawUrl == null || rawUrl.isBlank()) {
             throw new IllegalArgumentException("URL is blank");
         }
