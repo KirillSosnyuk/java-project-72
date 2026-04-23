@@ -24,14 +24,12 @@ public class DataSourceFactory {
 
     private static String resolveDbUrl(String fromProperty, String fromEnv) {
         if (fromProperty != null && !fromProperty.isBlank()) {
-            System.out.println("postgres connected");
             return fromProperty;
         }
         if (fromEnv != null && !fromEnv.isBlank()) {
-            System.out.println("postgres connected");
             return fromEnv;
         }
-        System.out.println("jdbc:h2 connected");
+
         return DEFAULT_DB_URL;
     }
 }
